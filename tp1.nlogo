@@ -1,32 +1,49 @@
-;alterações que fiz até agora: criei mais monitores, adicionei mais duas vars globais e modifiquei o checken, mas é só para fazer os testes de código.
-
 breed [gens gen]
 breed [sols sol]
-breed [forts  fort]
-globals [finish rprom gprom anygg anyrg rfb gfb fr fcrit rdprom gdprom agent] ;rfb Red Forts Built gfb Green Forts built fr Fort Recovers
+breed [forts fort]
+
+globals [finish rprom gprom anygg anyrg rfb gfb fcrit rdprom gdprom agent]
+
+;finish - Controls the end of the simulation
+;rprom - Red Promotions Counter
+;gprom - Green Promotions Counter
+;anygg - Checks if there's any Green General alive
+;anyrg - Checks if there's any Red General alive
+;rfb - Forts built by Red Army
+;gfb - Forts built by Green Army
+;fcrit - Checks how many Critical Hits turtles recieved from a Fort
+;rdprom - Red Demotions Counter
+;gdprom - Green Demotions Counter
+;agent - Var to store a turtle to check it before calling a Battle Procedure
+
 gens-own[en ex nder]
 sols-own[en ex nvic]
 forts-own[en ex]
 
+;en - Turtle Energy
+;ex - Turtle's Army. Stores the color they paint.
+;nder - Generals' Number of Defeats
+;nvic - Soldiers' Number of Victories
+
+
+
+
 ;------------SETUP---------------SETUP-------------SETUP-----------
 
 to setup
-
   setup-campo
   setup-patches
   setup-exer
   reset-ticks
-
 end
 
 to setup-campo
-
   clear-all
   set-patch-size 15
-
 end
 
 to setup-patches
+  ; Generating Green Initial Dominion
  let i 0
   while [i < gxcampsize]
   [
@@ -34,11 +51,13 @@ to setup-patches
     while [j < gycampsize]
     [
       ask patches with [pxcor = max-pxcor - i - 3 and pycor = max-pycor - j - 3]
-      [set pcolor blue]
+      [set pcolor yellow]
       set j j + 1
     ]
     set i i + 1
   ]
+
+  ; Generating Red Initial Dominion
 
   set i 0
   while [i < rxcampsize]
@@ -48,7 +67,7 @@ to setup-patches
     [
 
       ask patches with [pxcor = min-pxcor + i + 3 and pycor = min-pxcor + j + 3]
-      [set pcolor yellow]
+      [set pcolor blue]
       set j j + 1
     ]
     set i i + 1
@@ -59,8 +78,23 @@ to setup-exer
   set finish 0
   set rprom 0
   set gprom 0
-  set anyrg 1
-  set anygg 1
+
+  ifelse nrgen = 0
+  [
+    set anyrg 1
+  ]
+  [
+    set anyrg 0
+  ]
+
+  ifelse nggen = 0
+  [
+    set anygg 1
+  ]
+  [
+    set anygg 0
+  ]
+
   create-sols ngsol
   [
     set en maxe
@@ -70,7 +104,6 @@ to setup-exer
     let x one-of patches with [pcolor = yellow]
     ;set heading one-of [0 90 180 270]
     setxy [pxcor] of x [pycor] of x
-
   ]
 
   create-gens nggen
@@ -108,10 +141,12 @@ to setup-exer
 end
 
 to go
-;  if ticks = 0
-;  [
-;    output-print "Inicio"
-;  ]
+
+  if ticks = 0
+  [
+    output-print "Inicio"
+  ]
+
   checken
   checkfinish
   movegen
@@ -127,20 +162,20 @@ to go
   [
      output-print "Fim"
 
-    let x count patches with [pcolor = yellow]
-    let y count patches with [pcolor = blue]
-
-    if x < y
-    [output-print "Reds win!"]
-    if x > y
-    [output-print "Greens win!"]
-    if x = y
-    [output-print "It's a Tie!"]
-
+    if (extra and extra-goals != "2x Generals") or (not extra)
+    [
+      let x count patches with [pcolor = yellow]
+      let y count patches with [pcolor = blue]
+      if x < y
+      [output-print "Reds win!"]
+      if x > y
+      [output-print "Greens win!"]
+      if x = y
+      [output-print "It's a Tie!"]
+    ]
     stop
   ]
   tick
-
 end
 
 ;-----------------MOVES--------------------------MOVES--------------------MOVES------------------------
@@ -148,19 +183,26 @@ end
 to movesol
 ask sols[
     set label round en
+
+    ; Counts Number of Enemy Generals Ahead and in Right patch
+
     let counter (count (gens-on patch-ahead 1) with [ex != [ex] of myself] + count (gens-on patch-right-and-ahead 90 1) with [ex != [ex] of myself])
+
     ifelse counter = 1 and (not (any? (sols-on patch-ahead 1) with [ex != [ex] of myself] or any? (sols-on patch-right-and-ahead 90 1) with [ex != [ex] of myself]))
     [
+      ;runs away if there's only an enemy general
       rt 180
       fd 2
       set en en - 1
     ]
     [
+      ;more than one soldier ahead
       ifelse any? (sols-on patch-ahead 1) with [ex != [ex] of myself] or any? (gens-on patch-ahead 1) with [ex != [ex] of myself]
       [
        BattleS
       ]
       [
+        ;More than one soldier on its right
         ifelse any? (sols-on patch-right-and-ahead 90 1) with [ex != [ex] of myself] or any? (gens-on patch-right-and-ahead 90 1) with [ex != [ex] of myself]
         [
           rt 90
@@ -168,6 +210,7 @@ ask sols[
           rt -90
         ]
         [
+          ;No soldiers and patch ahead to conquer
           ifelse [pcolor] of patch-ahead 1 != ex
           [
             fd 1
@@ -181,6 +224,7 @@ ask sols[
             ]
           ]
           [
+            ;Patch on its right to conquer
             ifelse [pcolor] of patch-right-and-ahead 90 1 != ex
             [
               fd 1
@@ -188,6 +232,7 @@ ask sols[
               set pcolor ex
             ]
             [
+              ;Everything conquered, go ahead
               fd 1
             ]
           ]
@@ -207,31 +252,32 @@ to movegen
   ask gens[
     set label round en
 
-    recover ;recupera vida
+    recover ;energy recover
 
-    ;---------------------Verificar Vizinhança
+    ;---------------------Check Neighbors
 
-    ifelse any? (turtles-on neighbors4) with [ex != [ex] of myself and breed != forts]  ;verifica se há inimigos
+    ifelse any? (turtles-on neighbors4) with [ex != [ex] of myself and breed != forts]  ;Check Enemies
       [
         ifelse any? (gens-on neighbors4) with [ex != ([ex] of myself)]
         [
           BattleGG
         ]
         [
-          ;um soldado
+          ; He runs if there's only one soldier
           ifelse count (sols-on neighbors4) with [ex != ([ex] of myself)] < 2
           [
             rt 180
             fd 2
             set en (en - 1)
           ]
-          ;vários soldados
+          ; More than one
           [
             BattleGS
           ]
         ]
       ]
     [
+      ; Conquering Area
       let z black
       ifelse ex = blue
       [
@@ -252,6 +298,7 @@ to movegen
     ]
     set en en - 1
 
+    ;To avoid the simulation running too long
     if ticks > 50000
     [
       set en en - (en * 5000)
@@ -268,23 +315,19 @@ end
 
 ;-------------BATTLES-------------BATTLES---------BATTLES-----------BATTLES-------------------
 
-to BattleS ;verificar qual procedure a chamar
-   set agent one-of (turtles-on patch-ahead 1) with [ex != [ex] of myself and breed != forts] ;guardar no agente uma turtle inimiga
-        let check 0 ;variavel de verificação
-        ask agent
-        [
-          if breed = sols
-          [
-            set check 1
-          ]
-          if breed = gens
-          [
-            set check 2
-          ]
-        ]
-  if check = 0
+to BattleS ;check what procedure to call
+  set agent one-of (turtles-on patch-ahead 1) with [ex != [ex] of myself and breed != forts] ;store turtle
+  let check 0 ;checking var
+  ask agent
   [
-    output-print "Há aqui um forte? :o"
+    if breed = sols
+    [
+      set check 1
+    ]
+    if breed = gens
+    [
+      set check 2
+    ]
   ]
   if check = 1
   [
@@ -296,46 +339,44 @@ to BattleS ;verificar qual procedure a chamar
   ]
 end
 
-
 to BattleGG
-  let entmp en ;variavel temporária para poder manipular a energia da turtle que está a perguntar
+  let entmp en ;stores the active turtle's energy
   ask one-of (turtles-on neighbors4) with [(ex != [ex] of myself) and (breed = [breed] of myself)]
   [
     ifelse random 2 < 1 ;50 50
     [
-      ;Ganhou
-      set en en / 2 ;corta para metade a energia da tartaruga que está a ser interrogada
-      set entmp entmp + en ;guarda na temporaria a nova energia
+      ;Won the Battle
+      set en en / 2 ;Splices Energy in half
+      set entmp entmp + en ;Updates the Energy
     ]
     [
-      ;Perdeu
-      set entmp entmp / 2 ;corta para metade a energia da tartaruga que está a interrogar
-      set en en + entmp ;atualiza a energia da interrogada
+      ;Lost the battle
+      set entmp entmp / 2
+      set en en + entmp
     ]
-    ;verifica se a tartaruga está morta e mata-a, pois podes correr o risco de ela ainda chamar a batalha antes de chamar o procedure que verifica se ela morreu (aka evitar uma morte à alentejano)
 
     forte-effect
 
+    ;checks if the turtle died in battle (usually this is impossible coz it's always splicing in half, but with forte-effect call, they may die)
     if en <= 0
     [
-      print en
       die
     ]
   ]
-  set en entmp ;atualiza a energia da tartaruga a interrogar
+  set en entmp ;updates the energy
 
   forte-effect
 
-  ;verificas se ela morreu ou não também
+  ;check if died
   if en <= 0
   [
-    print en
     die
   ]
 end
 
 to BattleGS
   let entmp en
+  let der 0
   ask one-of (turtles-on neighbors4) with [(ex != [ex] of myself) and (breed != [breed] of myself) and (breed != forts)]
   [
     ifelse random 4 < 3
@@ -351,25 +392,28 @@ to BattleGS
       ;Perdeu
       set entmp entmp / 2
       set en en + entmp
-      set nvic nvic + 1
+      set nvic nvic + 1 ;add more victories to check promotion
+      set der 1
     ]
 
     forte-effect
 
     if en <= 0
     [
-      print en
       die
     ]
   ]
 
   set en entmp
+  if der = 1
+  [
+    set nder nder + 1
+  ]
 
   forte-effect
 
   if en <= 0
   [
-    print en
     die
   ]
 
@@ -382,17 +426,16 @@ to BattleSG
   [
     ifelse random 4 = 3
     [
-      ;Ganhou
       set en en / 2
       set entmp entmp + en
       set vic 1
     ]
     [
-      ;Perdeu
       set entmp entmp / 2
       if (ex = yellow and anyrg = 0) or (ex = blue and anygg = 0) or entmp > llimit
       [
-          set en en + entmp
+        set en en + entmp
+        set nder nder + 1
       ]
     ]
 
@@ -400,7 +443,6 @@ to BattleSG
 
     if en <= 0
     [
-      print en
       die
     ]
   ]
@@ -410,7 +452,6 @@ to BattleSG
 
   if en <= 0
   [
-    print en
     die
   ]
   if vic = 1
@@ -452,7 +493,6 @@ to BattleSS
 
     if en <= 0
     [
-      print en
       die
     ]
   ]
@@ -462,7 +502,6 @@ to BattleSS
 
   if en <= 0
   [
-    print en
     die
   ]
   if vic = 1
@@ -500,11 +539,13 @@ to promote
       [ set gdprom gdprom + 1]
       [ set rdprom rdprom + 1]
       ]
+
+
     ]
   ]
 end
 
-to recover
+to recover ;generals recover energy according to the number of soldiers of their army in their neighbors. They get 5% of their energy
   let x 0
   if any? (sols-on neighbors4) with [ex = [ex] of self]
   [
@@ -517,9 +558,9 @@ to recover
   set en (en + x)
 end
 
-;-------------------------------verificar fim
+;-------------------------------checking end
 
-to checken
+to checken ; Checking Energy
   ask turtles
   [
     if en <= 0
@@ -530,7 +571,7 @@ to checken
 
   ifelse (count gens with [ex = yellow]) = 0 and anygg = 0
   [
-    ;output-print "Morreu o último General Verde!"
+    output-print "Morreu o último General Verde!"
     set anygg 1
   ]
   [
@@ -542,7 +583,7 @@ to checken
 
   ifelse (count gens with [ex = blue]) = 0 and anyrg = 0
   [
-    ;output-print "Morreu o último General Vermelho!"
+    output-print "Morreu o último General Vermelho!"
     set anyrg 1
   ]
   [
@@ -558,58 +599,49 @@ to checken
   ]
 end
 
-to checkfinish
+to checkfinish ; Checking if the goals were obtained
+
+  if extra
+  [
+    if Extra-Goals = "2x Generals"
+    [
+      let x count gens with [ex = blue]
+      let y count gens with [ex = yellow]
+      if x >= 2 * y and ticks > 100
+      [
+        output-print "The Red Army has twice the Generals of the Green Army. Red Army wins."
+        set finish 1
+      ]
+      if y >= 2 * x and ticks > 100
+      [
+        output-print "The Green Army has twice the Generals of the Red Army. Green Army wins."
+        set finish 1
+      ]
+    ]
+  ]
+
   let x count patches with [pcolor != yellow]
   let y count patches with [pcolor != blue]
+
   if x <= 0 or y <= 0
   [
     set finish 1
   ]
-end
 
-to go_case
-  let i 0
-  while [i < 30]
-  [
-    setup
-    set finish 0
-
-    while [finish = 0]
-    [
-      checken
-      checkfinish
-      movegen
-      movesol
-      promote
-      tick
-    ]
-
-    let tcg count patches with [pcolor = yellow]
-    let tcr count patches with [pcolor = blue]
-    let s ";"
-    output-write ticks
-    type s
-    output-write tcg
-    type s
-    output-write tcr
-    type s
-    output-write gprom
-    type s
-    output-write rprom
-    type s
-    set i i + 1
-  ]
-
-  stop
 end
 
 ;-----------------------EXTRA---------------EXTRA--------------------EXTRA
+
+;to forte - Sets the building of forts
+;to forte-check - Checks the conquering / destruction of forts
+;to forte-recover - Soldiers Recover 1% of their Energy when near to a fort
+;to forte-effect - Forts attack enemies in their surroundings
 
 to forte
   ask patches[
     let x count (sols-here with [ex = blue])
     let y count (sols-here with [ex = yellow])
-    ifelse x > 4 and not any? forts-here
+    if x > 3 and not any? forts-here
     [
       sprout-forts 1
       [
@@ -620,17 +652,15 @@ to forte
         set rfb rfb + 1
       ]
     ]
+    if y > 3 and not any? forts-here
     [
-      if y > 4 and not any? forts-here
+      sprout-forts 1
       [
-        sprout-forts 1
-        [
-          set en 1
-          set ex yellow
-          set shape "chess rook"
-          set color green
-          set gfb gfb + 1
-        ]
+        set en 1
+        set ex yellow
+        set shape "chess rook"
+        set color green
+        set gfb gfb + 1
       ]
     ]
   ]
@@ -641,9 +671,8 @@ ask forts
   [
     if pcolor != [ex] of self
     [
-      ifelse random 100 < 30
+      ifelse random 100 < 70
       [
-        output-print "Forte mudou de lealdade"
         ifelse ex = blue
         [
           set ex yellow
@@ -655,7 +684,6 @@ ask forts
         ]
       ]
       [
-        output-print "Forte abatido"
         die
       ]
     ]
@@ -668,7 +696,6 @@ to forte-recover
     if any? (forts-on neighbors) with [ex = [ex] of myself] and ticks < 10000
     [
         set en en * 1.01
-        set fr fr + 1
     ]
   ]
 end
@@ -688,9 +715,9 @@ to forte-effect
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-195
+155
 10
-698
+658
 514
 -1
 -1
@@ -715,10 +742,10 @@ ticks
 30.0
 
 BUTTON
-719
-522
-783
-555
+672
+10
+736
+43
 Setup
 setup
 NIL
@@ -732,40 +759,40 @@ NIL
 1
 
 SLIDER
-6
-59
-178
-92
+16
+331
+143
+364
 ngsol
 ngsol
 0
 100
-100.0
+86.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-6
-102
-178
-135
+16
+369
+143
+402
 nggen
 nggen
 0
 20
-20.0
+18.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-6
-149
-178
-182
+16
+422
+143
+455
 nrsol
 nrsol
 0
@@ -777,25 +804,25 @@ NIL
 HORIZONTAL
 
 SLIDER
-8
-196
-180
-229
+16
+460
+143
+493
 nrgen
 nrgen
 0
 20
-20.0
+13.0
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-793
-522
-856
-555
+739
+10
+803
+43
 Go
 go
 T
@@ -809,25 +836,25 @@ NIL
 1
 
 SLIDER
-707
-25
-879
-58
+15
+240
+144
+273
 Rxcampsize
 Rxcampsize
 1
 max-pxcor - 3
-13.0
+5.0
 1
 1
 Largura
 HORIZONTAL
 
 SLIDER
-882
-24
-1054
-57
+15
+155
+144
+188
 Gxcampsize
 Gxcampsize
 1
@@ -839,25 +866,25 @@ Largura
 HORIZONTAL
 
 SLIDER
-6
-237
-178
-270
+14
+26
+144
+59
 maxe
 maxe
 llimit
 200
-200.0
+100.0
 1
 1
 Energia
 HORIZONTAL
 
 MONITOR
-805
-355
-888
-400
+989
+165
+1088
+210
 Green Soldiers
 count sols with [ex = yellow]
 17
@@ -865,10 +892,10 @@ count sols with [ex = yellow]
 11
 
 MONITOR
-708
-354
-800
-399
+989
+117
+1088
+162
 Red Soldiers
 count sols with [ex = blue]
 17
@@ -876,10 +903,10 @@ count sols with [ex = blue]
 11
 
 MONITOR
-805
-460
-913
-505
+989
+355
+1088
+400
 Green's Dominion
 count patches with [pcolor = yellow]
 17
@@ -887,10 +914,10 @@ count patches with [pcolor = yellow]
 11
 
 MONITOR
-705
-460
-801
-505
+989
+307
+1088
+352
 Red's Dominion
 count patches with [pcolor = blue]
 17
@@ -898,10 +925,10 @@ count patches with [pcolor = blue]
 11
 
 PLOT
-708
-108
-1025
-341
+664
+144
+824
+264
 Dominions
 ticks
 NIL
@@ -918,10 +945,10 @@ PENS
 "Rogue" 1.0 0 -16777216 true "" "plot count patches with [pcolor = black]"
 
 SLIDER
-6
-278
-178
-311
+14
+67
+144
+100
 llimit
 llimit
 0
@@ -932,21 +959,11 @@ maxe
 Energia
 HORIZONTAL
 
-TEXTBOX
-1085
-40
-1326
-152
-Falta fazer:\ngenerais (falar com o stor)\nTestes
-11
-0.0
-1
-
 PLOT
-1033
-107
-1233
-257
+827
+388
+987
+508
 Army Size
 NIL
 NIL
@@ -962,10 +979,10 @@ PENS
 "Reds" 1.0 0 -5298144 true "" "plot count sols with [ex = blue] + count gens with [ex = blue]"
 
 MONITOR
-705
-408
-802
-453
+989
+22
+1088
+67
 Red Generals
 count gens with [ex = blue]
 17
@@ -973,10 +990,10 @@ count gens with [ex = blue]
 11
 
 MONITOR
-805
-408
-895
-453
+989
+70
+1088
+115
 Green Generals
 count gens with [ex = yellow]
 17
@@ -984,10 +1001,10 @@ count gens with [ex = yellow]
 11
 
 MONITOR
-895
-354
-995
-399
+989
+212
+1088
+257
 Red Promotions
 rprom
 17
@@ -995,10 +1012,10 @@ rprom
 11
 
 MONITOR
-906
-409
-1017
-454
+989
+260
+1088
+305
 Green Promotions
 gprom
 17
@@ -1006,11 +1023,11 @@ gprom
 11
 
 PLOT
-1033
-263
-1233
-413
-General Promotions
+827
+22
+987
+142
+Promotions
 NIL
 NIL
 0.0
@@ -1025,25 +1042,25 @@ PENS
 "Greens" 1.0 0 -14439633 true "" "plot gprom"
 
 SLIDER
-708
-65
-880
-98
+15
+278
+144
+311
 Rycampsize
 Rycampsize
 1
 max-pycor - 3
-13.0
+5.0
 1
 1
 Altura
 HORIZONTAL
 
 SLIDER
-882
-65
-1054
-98
+15
+192
+144
+225
 Gycampsize
 Gycampsize
 1
@@ -1055,10 +1072,10 @@ Altura
 HORIZONTAL
 
 PLOT
-1030
-576
-1230
-726
+827
+144
+987
+264
 Red Army
 NIL
 NIL
@@ -1074,10 +1091,10 @@ PENS
 "Soldiers" 1.0 0 -7500403 true "" "plot count sols with [ex = blue]"
 
 PLOT
-1031
-417
-1231
-567
+827
+266
+987
+386
 Green Army
 NIL
 NIL
@@ -1093,25 +1110,25 @@ PENS
 "Soldiers" 1.0 0 -7500403 true "" "plot count sols with [ex = yellow]"
 
 SLIDER
-7
-322
-179
-355
+14
+106
+144
+139
 promotionvics
 promotionvics
 5
 100
-50.0
+100.0
 1
 1
 NIL
 HORIZONTAL
 
 MONITOR
-915
-460
-1000
-505
+989
+403
+1088
+448
 Rogue Lands
 count patches with [pcolor = black]
 17
@@ -1119,38 +1136,21 @@ count patches with [pcolor = black]
 11
 
 SWITCH
-36
-369
-126
-402
+692
+58
+784
+91
 extra
 extra
-0
+1
 1
 -1000
 
-BUTTON
-887
-521
-965
-554
-Go Case
-go_case
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 MONITOR
-24
-439
-91
-484
+1199
+307
+1290
+352
 Red Forts
 count forts with [ex = blue]
 17
@@ -1158,10 +1158,10 @@ count forts with [ex = blue]
 11
 
 MONITOR
-95
-440
-174
-485
+1199
+260
+1290
+305
 Green Forts
 count forts with [ex = yellow]
 17
@@ -1169,59 +1169,176 @@ count forts with [ex = yellow]
 11
 
 MONITOR
-30
-489
-87
-534
-NIL
+1090
+307
+1195
+352
+Red Forts Built
 rfb
 17
 1
 11
 
 MONITOR
-95
-489
-152
-534
-NIL
+1090
+260
+1195
+305
+Green Forts Built
 gfb
 17
 1
 11
 
 MONITOR
-64
-597
-121
-642
-NIL
-fr
-17
-1
-11
-
-MONITOR
-29
-542
-86
-587
-NIL
+1091
+22
+1184
+67
+Red Demotions
 rdprom
 17
 1
 11
 
 MONITOR
-95
-544
-152
-589
-NIL
+1187
+22
+1291
+67
+Green Demotions
 gdprom
 17
 1
 11
+
+TEXTBOX
+694
+43
+767
+61
+Extra Settings
+11
+0.0
+1
+
+TEXTBOX
+1091
+247
+1129
+265
+Forts
+11
+0.0
+1
+
+PLOT
+1090
+355
+1290
+475
+Forts
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Reds" 1.0 0 -5298144 true "" "plot count forts with [ex = blue]"
+"Greens" 1.0 0 -14439633 true "" "plot count forts with [ex = yellow]"
+
+CHOOSER
+692
+93
+784
+138
+Extra-Goals
+Extra-Goals
+"None" "2x Generals"
+0
+
+PLOT
+1091
+70
+1291
+210
+General Demotions
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+true
+"" ""
+PENS
+"Reds" 1.0 0 -5298144 true "" "plot rdprom"
+"Greens" 1.0 0 -14439633 true "" "plot gdprom"
+
+TEXTBOX
+1092
+10
+1242
+28
+General Demotions
+11
+0.0
+1
+
+TEXTBOX
+16
+139
+104
+157
+Green Camp Size
+11
+0.0
+1
+
+TEXTBOX
+18
+225
+168
+243
+Red Camp Size
+11
+0.0
+1
+
+TEXTBOX
+19
+315
+86
+333
+Green Army
+11
+0.0
+1
+
+TEXTBOX
+17
+408
+167
+426
+Red Army
+11
+0.0
+1
+
+TEXTBOX
+17
+10
+167
+28
+Global Settings
+11
+0.0
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
